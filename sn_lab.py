@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+import wandb
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -11,7 +12,6 @@ hidden_sizes = [128, 64, 32]
 num_epochs = 10
 batch_size = 64
 learning_rate = 0.001
-
 
 class Autoencoder(nn.Module):
     def __init__(self):
@@ -38,13 +38,12 @@ class Autoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
-
 def train(model, data_loader, criterion, optimizer, num_epochs):
     model.train()
     for epoch in range(num_epochs):
         total_loss = 0
         for data, _ in data_loader:
-            data = data.to(device)
+            data = data.view(-1, input_size).to(device)
             outputs = model(data)
             loss = criterion(outputs, data)
             optimizer.zero_grad()
@@ -53,9 +52,8 @@ def train(model, data_loader, criterion, optimizer, num_epochs):
             total_loss += loss.item()
 
         avg_loss = total_loss / len(data_loader)
-        print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
+        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}")
     return avg_loss
-
 
 def get_data_loaders(batch_size):
     transform = transforms.Compose(
@@ -77,24 +75,17 @@ def get_data_loaders(batch_size):
     )
     return train_loader
 
-
 def main():
+    wandb.init(project="autoencoder-training", config={"learning_rate": learning_rate, "epochs": num_epochs, "batch_size": batch_size})
     train_loader = get_data_loaders(batch_size)
 
     model = Autoencoder().to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    final_loss = train(
-        model,
-        train_loader,
-        criterion,
-        optimizer,
-        num_epochs,
-    )
-
-    print("Final Loss:", final_loss)
-
+    final_loss = train(model, train_loader, criterion, optimizer, num_epochs)
+    wandb.log({"final_loss": final_loss})
+    wandb.finish()
 
 if __name__ == "__main__":
     main()
